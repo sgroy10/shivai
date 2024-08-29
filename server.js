@@ -4,11 +4,12 @@ const path = require('path');
 const axios = require('axios');
 const session = require('express-session');
 const fs = require('fs');
-require('dotenv').config();  // Load the .env file
 
 const app = express();
 
-// Use API keys from environment variables
+require('dotenv').config();
+
+// Integrated API keys using environment variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GOOGLE_TTS_API_KEY = process.env.GOOGLE_TTS_API_KEY;
 
@@ -90,6 +91,7 @@ app.post('/api/chat', async (req, res) => {
             req.session.context.push({ role: "user", content: message });
         }
 
+        // Parallel processing
         const responseDataPromise = makeApiRequest('https://api.openai.com/v1/chat/completions', {
             model: "gpt-4",
             messages: req.session.context,
@@ -104,14 +106,19 @@ app.post('/api/chat', async (req, res) => {
 
             req.session.context.push({ role: "assistant", content: aiMessage });
 
+            // Start TTS processing while sending the response to the client
             const ttsPromise = axios.post('/api/tts', { message: aiMessage, languageCode: language });
 
+            // Send the AI text response back immediately
             res.json({ message: aiMessage });
 
+            // Process the TTS audio after response has been sent
             try {
                 const ttsResponse = await ttsPromise;
                 const audioContent = ttsResponse.data.audioContent;
 
+                // Play audio content (you would trigger this on the client side)
+                // E.g., you could send the audioContent to the client through a WebSocket or trigger a fetch request
             } catch (ttsError) {
                 console.error('Error in TTS processing:', ttsError.response ? ttsError.response.data : ttsError.message);
             }
@@ -132,11 +139,12 @@ app.post('/api/tts', async (req, res) => {
 
         const cleanedMessage = message.replace(/:\)|😊|😄|😉/g, '');  // Remove emoji representations
 
+        // Map language codes to specific WaveNet voices
         const voiceMap = {
             'en-US': { name: 'en-US-Wavenet-F', ssmlGender: 'FEMALE' },
             'hi-IN': { name: 'hi-IN-Wavenet-A', ssmlGender: 'MALE' },
             'ko-KR': { name: 'ko-KR-Wavenet-B', ssmlGender: 'MALE' },
-            'cmn-CN': { name: 'cmn-CN-Wavenet-A', ssmlGender: 'FEMALE' }, 
+            'cmn-CN': { name: 'cmn-CN-Wavenet-A', ssmlGender: 'FEMALE' }, // Correct Chinese language code
         };
 
         const voiceParams = voiceMap[languageCode] || voiceMap['en-US'];
@@ -154,6 +162,7 @@ app.post('/api/tts', async (req, res) => {
     }
 });
 
+// Route for the main application
 app.get('/app', (req, res) => {
     console.log('Attempting to serve main application');
     const indexPath = path.join(__dirname, 'frontend', 'index.html');
@@ -167,6 +176,7 @@ app.get('/app', (req, res) => {
     }
 });
 
+// Catch-all route (keep this at the end)
 app.get('*', (req, res) => {
     console.log('Catch-all route hit, redirecting to root');
     res.redirect('/');
